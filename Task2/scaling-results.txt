@@ -1,0 +1,22 @@
+=== РЕЗУЛЬТАТЫ ДИНАМИЧЕСКОГО МАСШТАБИРОВАНИЯ ===
+
+1. НАЧАЛЬНОЕ СОСТОЯНИЕ:
+   - Количество подов: 1
+   - Утилизация памяти: ~49%
+
+2. ПОСЛЕ НАГРУЗОЧНОГО ТЕСТИРОВАНИЯ:
+   - Количество подов: 3 (автоматическое масштабирование)
+   - Утилизация памяти: 99% (превышение порога 80%)
+   - HPA Events: 2 успешных масштабирования
+
+3. ТЕКУЩИЙ СТАТУС HPA:
+NAME                      REFERENCE                 TARGETS           MINPODS   MAXPODS   REPLICAS   AGE
+scaletestapp-hpa-memory   Deployment/scaletestapp   memory: 99%/80%   1         10        5          12m
+
+4. ТЕКУЩИЕ ПОДЫ:
+NAME                           READY   STATUS    RESTARTS   AGE
+scaletestapp-dfb45fc6b-4hjc2   1/1     Running   0          6m9s
+scaletestapp-dfb45fc6b-5j5c4   1/1     Running   0          2m23s
+scaletestapp-dfb45fc6b-mfw2w   1/1     Running   0          7m31s
+scaletestapp-dfb45fc6b-w9gc5   1/1     Running   0          4m24s
+scaletestapp-dfb45fc6b-wdwf9   1/1     Running   0          23s

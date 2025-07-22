@@ -1,0 +1,114 @@
+@startuml InsureTech_OSAGO_Architecture
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title C4 Container Diagram: InsureTech с ОСАГО функциональностью
+
+Person(client, "Клиент", "Пользователь системы InsureTech")
+
+System_Boundary(insuretech, "InsureTech Platform") {
+
+    Container(web_app, "InsureTech Web", "JavaScript, React", "Веб-приложение с WebSocket для real-time ОСАГО")
+    Container(load_balancer, "Load Balancer", "Nginx/HAProxy", "Балансировщик нагрузки с sticky sessions")
+    
+    Container(core_app, "Core App", "Kotlin, SpringBoot", "Основное приложение + ОСАГО заявки")
+    Container(client_info, "Client Info", "Kotlin, SpringBoot", "Сервис учета клиентских данных")
+    Container(settlement, "Insurance Settlement", "Kotlin, SpringBoot", "Сервис взаиморасчетов")
+    Container(product_aggregator, "Product Aggregator", "Kotlin, SpringBoot", "Агрегатор продуктов")
+    Container(osago_aggregator, "OSAGO Aggregator", "Kotlin, SpringBoot", "Агрегатор ОСАГО предложений")
+    
+    Container(kafka_cluster, "Apache Kafka", "Message Broker", "Шина событий + ОСАГО events")
+    Container(outbox_processor, "Outbox Processor", "Debezium CDC", "Обработчик transactional outbox")
+    
+    ContainerDb(core_db, "Core Database", "PostgreSQL", "База данных с outbox + ОСАГО заявки")
+    ContainerDb(client_info_db, "Client Info DB", "PostgreSQL", "База данных клиентов") 
+    ContainerDb(settlement_db, "Settlement DB", "PostgreSQL", "База данных расчетов")
+    ContainerDb(osago_db, "OSAGO Database", "PostgreSQL", "Заявки и котировки ОСАГО")
+    ContainerDb(product_cache, "Product Cache", "Redis", "Кэш продуктов + ОСАГО sessions")
+    ContainerDb(osago_cache, "OSAGO Cache", "Redis Cluster", "Распределенный кэш ОСАГО")
+}
+
+System_Ext(partners, "Партнеры", "Внешние системы партнеров")
+System_Ext(payment_service, "Платежный сервис", "Внешний платежный сервис")
+System_Ext(insurance_companies, "Страховые компании", "10 компаний с ОСАГО API")
+
+' User interactions
+Rel(client, web_app, "ОСАГО заявка", "HTTPS")
+Rel(web_app, load_balancer, "WebSocket + REST", "WSS/HTTPS")
+Rel(load_balancer, core_app, "Sticky sessions", "HTTP/WS")
+
+' Core app interactions
+Rel(core_app, core_db, "Заявки ОСАГО + outbox", "JDBC")
+Rel(core_app, osago_aggregator, "Запрос котировок", "REST + Circuit Breaker")
+Rel(osago_aggregator, core_app, "Real-time котировки", "WebSocket")
+
+' OSAGO aggregator
+Rel(osago_aggregator, osago_db, "Хранение заявок", "JDBC")
+Rel(osago_aggregator, osago_cache, "Кэш сессий", "Redis")
+Rel(osago_aggregator, insurance_companies, "ОСАГО API", "REST + CB + Retry + Timeout")
+
+' Event-driven flows
+Rel(outbox_processor, core_db, "Чтение outbox", "CDC")
+Rel(outbox_processor, kafka_cluster, "ОСАГО события", "Kafka Producer")
+Rel(kafka_cluster, osago_aggregator, "Обработка событий", "Kafka Consumer")
+
+' Other services (from Task3)
+Rel(client_info, client_info_db, "Хранение данных", "JDBC")
+Rel(settlement, settlement_db, "Хранение данных", "JDBC")
+Rel(product_aggregator, kafka_cluster, "События о продуктах", "Kafka Producer")
+Rel(kafka_cluster, core_app, "События продуктов", "Kafka Consumer")
+Rel(kafka_cluster, settlement, "События", "Kafka Consumer")
+
+' Caching
+Rel(core_app, product_cache, "Кэширование", "Redis")
+Rel(settlement, product_cache, "Чтение кэша", "Redis")
+
+' External integrations
+Rel(partners, core_app, "Интеграция", "REST")
+Rel(core_app, payment_service, "Платежи", "HTTP")
+
+' Resilience patterns annotations
+note top of osago_aggregator
+**Паттерны отказоустойчивости:**
+• Rate Limiting: 100 req/sec per user
+• Circuit Breaker: 50% error rate
+• Retry: 3 attempts, exponential backoff
+• Timeout: 60s total, 5s per request
+
+**Масштабирование:**
+• Multiple instances за Load Balancer
+• Sticky sessions для WebSocket
+• Redis Cluster для координации
+end note
+
+note right of kafka_cluster
+**OSAGO Topics:**
+- osago.requests (заявки)
+- osago.quotes (котировки)  
+- osago.sessions (WebSocket сессии)
+
+**Конфигурация:**
+- Partitioning по customer_id
+- Retention: 1 день
+- High throughput для 2500 users
+end note
+
+note bottom of osago_cache
+**Distributed Caching:**
+- WebSocket session tracking
+- Quote results caching
+- Request deduplication
+- TTL: 60 seconds
+end note
+
+note right of insurance_companies
+**OSAGO API:**
+POST /osago/application
+GET /osago/quote/{id}
+
+**SLA:**
+- Response time: <5s
+- Availability: 99%
+- Rate limit: 10 req/sec
+end note
+
+@enduml 

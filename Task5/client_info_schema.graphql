@@ -1,0 +1,284 @@
+# GraphQL Schema для Client Info Service
+
+"""
+Клиент - основная сущность системы управления клиентскими данными
+"""
+type Client {
+  """Уникальный идентификатор клиента"""
+  id: ID!
+  
+  """Полное имя клиента"""
+  name: String!
+  
+  """Возраст клиента"""
+  age: Int!
+  
+  """Список документов клиента"""
+  documents: [Document!]!
+  
+  """Список родственников клиента"""
+  relatives: [Relative!]!
+  
+  """Дата создания записи о клиенте"""
+  createdAt: String
+  
+  """Дата последнего обновления"""
+  updatedAt: String
+}
+
+"""
+Документ клиента (паспорт, водительские права, и т.д.)
+"""
+type Document {
+  """Уникальный идентификатор документа"""
+  id: ID!
+  
+  """Тип документа (passport, driver_license, insurance_policy)"""
+  type: DocumentType!
+  
+  """Номер документа"""
+  number: String!
+  
+  """Дата выдачи документа"""
+  issueDate: String!
+  
+  """Дата истечения срока действия"""
+  expiryDate: String
+  
+  """Орган выдавший документ"""
+  issuer: String
+  
+  """Статус документа (active, expired, revoked)"""
+  status: DocumentStatus!
+  
+  """Клиент, которому принадлежит документ"""
+  client: Client!
+}
+
+"""
+Родственник клиента
+"""
+type Relative {
+  """Уникальный идентификатор родственника"""
+  id: ID!
+  
+  """Тип родственной связи"""
+  relationType: RelationType!
+  
+  """Полное имя родственника"""
+  name: String!
+  
+  """Возраст родственника"""
+  age: Int!
+  
+  """Контактная информация"""
+  contactInfo: ContactInfo
+  
+  """Клиент, к которому относится родственник"""
+  client: Client!
+  
+  """Является ли родственник также клиентом системы"""
+  isClient: Boolean!
+  
+  """Ссылка на запись клиента, если родственник тоже клиент"""
+  clientRecord: Client
+}
+
+"""
+Контактная информация
+"""
+type ContactInfo {
+  """Номер телефона"""
+  phone: String
+  
+  """Электронная почта"""
+  email: String
+  
+  """Адрес проживания"""
+  address: Address
+}
+
+"""
+Адрес
+"""
+type Address {
+  """Страна"""
+  country: String
+  
+  """Город"""
+  city: String
+  
+  """Улица и дом"""
+  street: String
+  
+  """Почтовый индекс"""
+  postalCode: String
+}
+
+"""
+Типы документов
+"""
+enum DocumentType {
+  PASSPORT
+  DRIVER_LICENSE
+  INSURANCE_POLICY
+  BIRTH_CERTIFICATE
+  MARRIAGE_CERTIFICATE
+  TAX_ID
+  OTHER
+}
+
+"""
+Статусы документов
+"""
+enum DocumentStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+  PENDING
+}
+
+"""
+Типы родственных связей
+"""
+enum RelationType {
+  SPOUSE
+  CHILD
+  PARENT
+  SIBLING
+  GRANDPARENT
+  GRANDCHILD
+  UNCLE_AUNT
+  NEPHEW_NIECE
+  COUSIN
+  OTHER
+}
+
+"""
+Входные параметры для поиска клиентов
+"""
+input ClientSearchInput {
+  """Поиск по имени (частичное совпадение)"""
+  name: String
+  
+  """Поиск по возрасту (диапазон)"""
+  ageFrom: Int
+  ageTo: Int
+  
+  """Поиск по типу документа"""
+  documentType: DocumentType
+  
+  """Поиск по номеру документа"""
+  documentNumber: String
+  
+  """Лимит результатов"""
+  limit: Int = 20
+  
+  """Смещение для пагинации"""
+  offset: Int = 0
+}
+
+"""
+Входные параметры для фильтрации документов
+"""
+input DocumentFilterInput {
+  """Фильтр по типу документа"""
+  type: DocumentType
+  
+  """Фильтр по статусу"""
+  status: DocumentStatus
+  
+  """Только действующие документы"""
+  activeOnly: Boolean = false
+}
+
+"""
+Входные параметры для фильтрации родственников
+"""
+input RelativeFilterInput {
+  """Фильтр по типу родства"""
+  relationType: RelationType
+  
+  """Только родственники, которые также являются клиентами"""
+  clientsOnly: Boolean = false
+}
+
+"""
+Корневые запросы
+"""
+type Query {
+  """
+  Получить клиента по ID
+  """
+  client(id: ID!): Client
+  
+  """
+  Поиск клиентов по различным критериям
+  """
+  clients(search: ClientSearchInput): [Client!]!
+  
+  """
+  Получить документ по ID
+  """
+  document(id: ID!): Document
+  
+  """
+  Получить все документы клиента с фильтрацией
+  """
+  clientDocuments(clientId: ID!, filter: DocumentFilterInput): [Document!]!
+  
+  """
+  Получить родственника по ID
+  """
+  relative(id: ID!): Relative
+  
+  """
+  Получить всех родственников клиента с фильтрацией
+  """
+  clientRelatives(clientId: ID!, filter: RelativeFilterInput): [Relative!]!
+  
+  """
+  Получить полную информацию о клиенте одним запросом
+  """
+  clientFullInfo(id: ID!): Client
+}
+
+"""
+Мутации для изменения данных (расширение схемы)
+"""
+type Mutation {
+  """
+  Создать нового клиента
+  """
+  createClient(name: String!, age: Int!): Client!
+  
+  """
+  Обновить информацию о клиенте
+  """
+  updateClient(id: ID!, name: String, age: Int): Client!
+  
+  """
+  Добавить документ клиенту
+  """
+  addDocument(clientId: ID!, type: DocumentType!, number: String!, issueDate: String!, expiryDate: String): Document!
+  
+  """
+  Добавить родственника клиенту
+  """
+  addRelative(clientId: ID!, relationType: RelationType!, name: String!, age: Int!): Relative!
+}
+
+"""
+Подписки для real-time обновлений (опционально)
+"""
+type Subscription {
+  """
+  Подписка на изменения клиента
+  """
+  clientUpdated(id: ID!): Client!
+  
+  """
+  Подписка на добавление новых документов
+  """
+  documentAdded(clientId: ID!): Document!
+} 

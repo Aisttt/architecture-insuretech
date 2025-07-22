@@ -1,0 +1,75 @@
+@startuml InsureTech_EventDriven_Architecture
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title C4 Container Diagram: InsureTech Event-Driven Architecture
+
+Person(client, "Клиент", "Пользователь системы InsureTech")
+
+System_Boundary(insuretech, "InsureTech Platform") {
+
+    Container(web_app, "InsureTech Web", "JavaScript, React", "Веб-приложение для клиентов")
+    
+    Container(core_app, "Core App", "Kotlin, SpringBoot", "Основное приложение для работы с клиентами и полисами")
+    Container(client_info, "Client Info", "Kotlin, SpringBoot", "Сервис учета клиентских данных")
+    Container(settlement, "Insurance Settlement", "Kotlin, SpringBoot", "Сервис взаиморасчетов со страховыми компаниями")
+    Container(product_aggregator, "Product Aggregator", "Kotlin, SpringBoot", "Агрегатор продуктов страховых компаний")
+    
+    Container(kafka_cluster, "Apache Kafka", "Message Broker", "Шина событий для асинхронной коммуникации")
+    Container(outbox_processor, "Outbox Processor", "Debezium CDC", "Обработчик transactional outbox")
+    
+    ContainerDb(core_db, "Core Database", "PostgreSQL", "База данных с outbox таблицей")
+    ContainerDb(client_info_db, "Client Info DB", "PostgreSQL", "База данных клиентов") 
+    ContainerDb(settlement_db, "Settlement DB", "PostgreSQL", "База данных расчетов")
+    ContainerDb(product_cache, "Product Cache", "Redis", "Кэш продуктов и тарифов")
+}
+
+System_Ext(partners, "Партнеры", "Внешние системы партнеров")
+System_Ext(payment_service, "Платежный сервис", "Внешний платежный сервис")
+System_Ext(insurance_companies, "Страховые компании", "5 существующих + 5 новых компаний")
+
+Rel(client, web_app, "Использует", "HTTPS")
+Rel(web_app, core_app, "API запросы", "REST")
+Rel(web_app, client_info, "Данные клиентов", "REST")
+
+Rel(core_app, core_db, "Хранение данных + outbox", "JDBC")
+Rel(client_info, client_info_db, "Хранение данных", "JDBC")
+Rel(settlement, settlement_db, "Хранение данных", "JDBC")
+
+Rel(product_aggregator, insurance_companies, "Получение данных о продуктах", "REST/SOAP")
+
+Rel(outbox_processor, core_db, "Чтение outbox событий", "CDC")
+Rel(outbox_processor, kafka_cluster, "Публикация событий", "Kafka Producer")
+
+Rel(kafka_cluster, core_app, "События о продуктах", "Kafka Consumer")
+Rel(kafka_cluster, settlement, "События о продуктах и полисах", "Kafka Consumer")
+
+Rel(core_app, kafka_cluster, "События о полисах", "Kafka Producer")
+Rel(product_aggregator, kafka_cluster, "События о продуктах", "Kafka Producer")
+
+Rel(core_app, product_cache, "Кэширование", "Redis")
+Rel(settlement, product_cache, "Чтение кэша", "Redis")
+
+Rel(partners, core_app, "Интеграция", "REST")
+Rel(core_app, payment_service, "Платежи", "HTTP")
+
+note right of kafka_cluster
+Основные топики:
+- product.updates (изменения продуктов)
+- policy.events (события полисов)
+- policy.settlements (расчеты)
+
+Конфигурация:
+- Partitioning по company_id
+- Retention: 7 дней
+- Replication factor: 3
+end note
+
+note right of outbox_processor
+Transactional Outbox Pattern:
+1. Запись в БД + outbox в одной транзакции
+2. CDC читает outbox таблицу
+3. Публикация событий в Kafka
+4. Гарантия exactly-once delivery
+end note
+
+@enduml 
